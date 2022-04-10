@@ -1,0 +1,79 @@
+void GetEdge(HWND hwnd, BITMAP bmp, EDGE *path, BYTE *pDots){
+	int x,y,mx,my,dx,dy,ux,uy,d,t,dt,status;
+	BYTE *p,*q,*r;
+	char buf[100];
+	DIRECTION directions[8] = { { 0, 1 }, {1,1}, { 1, 0 }, { 1, -1 }, { 0, -1 },  { -1, -1 }, { -1, 0 },{ -1, 1 } };
+	POINT pt[10000];
+
+	q=pDots;
+	for(y=0;y<bmp.bmHeight;y++){
+		p=(BYTE*)bmp.bmBits+y*bmp.bmWidthBytes;
+		for(x=0;x<bmp.bmWidth;x++,q++){
+			if(p[4*x]>0x80 && p[4*x+1]>0x80 && p[4*x+2]>0x80){//background
+				*q=0;				
+				p[4*x]=0x00; p[4*x+1]=0x00 ; p[4*x+2]=0x00;
+			}else{ //image
+				*q=1;
+				p[4*x]=0x00; p[4*x+1]=0x00 ; p[4*x+2]=0xF0;
+			}
+		}
+	}
+	//find the first dot of the image
+	p=pDots;
+	for(y=0;y<bmp.bmHeight;y++){
+		for(x=0;x<bmp.bmWidth;x++,p++){
+			if(*p==1){
+				path->DotNum = 0;
+				path->start.x = x;
+				path->start.y = y;
+				y = bmp.bmHeight;
+				x = bmp.bmWidth;				
+			}
+		}
+	} 
+	//Trace the edge
+	path->DotNum=0;
+	mx = x = path->start.x;
+	my = y = path->start.y;
+	r = p = pDots + y*bmp.bmWidth + x;
+	dt=0;status=-1;
+	do{
+		for(t=0;t<8;t++){
+			d=(dt+t)%8;
+			dx = x + directions[d].x;
+			dy = y + directions[d].y;
+			q = pDots + dy * bmp.bmWidth + dx;
+
+			if(*q != *r && r != p ){
+				if(*q==1 && *r==0){ux=dx,uy=dy;}
+				if(*q==0 && *r==1){ux=mx,uy=my;}
+				status = AddDot(path,pt,ux,uy);
+				switch(status){
+					case 0:
+						return;
+					case -1:
+						path->directions[path->DotNum]=d; 
+						pt[path->DotNum].x = path->current.x = x = ux; 
+						pt[path->DotNum].y = path->current.y = y = uy;
+						path->DotNum++;
+						break;
+					case 1:
+						x=ux;y=uy;
+						break;
+				}
+				dt=d+5;t=7;
+			}else{
+				r=q;mx=dx;my=dy;
+			}
+		}
+		*((BYTE*)bmp.bmBits+y*bmp.bmWidthBytes+x*4+1)=0xFF;
+	}while(status!=0);	
+}
+int AddDot(EDGE* path, POINT *pt,int x,int y){
+	int i;
+	if(path->start.x == x && path->start.y == y)return 0;
+	for(i=0;i<path->DotNum;i++){
+		if(pt[i].x==x && pt[i].y==y)return 1;
+	}
+	return -1;
+}
