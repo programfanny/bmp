@@ -77,3 +77,461 @@ int AddDot(EDGE* path, POINT *pt,int x,int y){
 	}
 	return -1;
 }
+//----------------------------------------------------------------------------------------------------------
+/*
+A complete code for Digital Image process with a demo for bitmap on windows API(32) including Grey, Histogram, Binary, Domain, and Edge operations.
+*/
+#include <windows.h>
+#include <stdio.h>
+
+VOID BinaryBmp(BITMAP *pBmp, BYTE threshold);
+//将二值图的连通区域 标记 为不同颜色
+VOID GetDomain( BITMAP *pBmp, BYTE **Image, int **map, int *DomainsCount, POINT **DomainPoints,int **mark,int *labelcount);
+VOID GetEdge(BITMAP *pBmp,BYTE **Image);
+VOID GetHistogram(BITMAP *pBmp, int *histogram, int histogramSize, int *avHistogram, int *maxHistogram);
+
+VOID GreyBmp(BITMAP *pBmp);
+
+VOID ShowBmpInfo(HWND hwnd, BITMAP *pBmp);
+VOID ShowImage(HDC hdc, BITMAP bitmap, int *pMap);
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow){
+	static TCHAR szAppName[] = TEXT("HelloWin");
+	HWND hwnd;
+	MSG msg;
+	WNDCLASS wndclass;
+	wndclass.style = CS_HREDRAW | CS_VREDRAW;
+	wndclass.lpfnWndProc = WndProc;
+	wndclass.cbClsExtra = 0;
+	wndclass.cbWndExtra = 0;
+	wndclass.hInstance = hInstance;
+	wndclass.hIcon = LoadIcon(NULL,IDI_APPLICATION);
+	wndclass.hCursor = LoadCursor(NULL,IDC_ARROW);
+	wndclass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	wndclass.lpszMenuName = NULL;
+	wndclass.lpszClassName = szAppName;
+	if(!RegisterClass(&wndclass)){
+		MessageBox(NULL,TEXT("This program requires Windows NT!"), szAppName, MB_ICONERROR);
+		return 0;
+	}
+	hwnd = CreateWindow(szAppName,TEXT("The Hello Program"),WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,NULL,NULL,hInstance,NULL);
+	ShowWindow(hwnd,iCmdShow);
+	UpdateWindow(hwnd);
+	while(GetMessage(&msg,NULL,0,0)){
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	return msg.wParam;
+}
+LRESULT CALLBACK WndProc(HWND hwnd, UINT message,WPARAM wParam,LPARAM lParam){
+	HANDLE hInstance;
+	HDC hdc,hdcMem;
+	PAINTSTRUCT ps;
+	RECT rect;
+	HFONT hFont;
+	char buf[100];
+	static HBITMAP hBitmap;
+	static BITMAP bitmap;
+	static LPCSTR filename = "gear.bmp";
+	static BYTE *pOrigin,*p,*pImage;
+	static int *pMap,*histogram,histogramSize=256,avHistogram,maxHistogram;
+	static POINT *DomainPoints;
+	static int DomainsCount;
+	static int *mark,markCount;
+
+	switch(message){
+		case WM_CREATE:
+			//hInstance = GetWindowsLong(hwnd,GWL_HINSTANCE);
+			hInstance = ((LPCREATESTRUCT) lParam)->hInstance;
+			//hBitmap = LoadBitmap(hInstance, MSKEINTRESOURCE(IDC_BITMAP));
+			hBitmap = LoadImage(hInstance,filename,IMAGE_BITMAP,0,0,LR_LOADFROMFILE);
+			GetObject(hBitmap,sizeof(BITMAP),&bitmap);
+			bitmap.bmBits=(BYTE*)malloc(bitmap.bmWidthBytes*bitmap.bmHeight);
+			GetBitmapBits(hBitmap,bitmap.bmWidthBytes*bitmap.bmHeight,bitmap.bmBits);
+			pOrigin = (BYTE*)malloc(bitmap.bmWidthBytes*bitmap.bmHeight);
+			GetBitmapBits(hBitmap,bitmap.bmWidthBytes*bitmap.bmHeight,pOrigin);
+			return 0;
+		case WM_PAINT:
+			hdc = BeginPaint(hwnd, &ps);
+			hdcMem = CreateCompatibleDC(hdc);
+			SelectObject(hdcMem,hBitmap);
+			BitBlt(hdc,0,0,bitmap.bmWidth,bitmap.bmHeight,hdcMem,0,0,SRCCOPY);
+			DeleteDC(hdcMem);
+			// 	sprintf(buf,"%d  %p",bitmap.bmWidth,pMap);
+			// 	TextOut(hdc,100,140,buf,strlen(buf));
+			//  if(pMap)ShowImage(hdc,bitmap,pMap);
+			//  if(markCount){
+			//  	int count =0;
+			//  	for(int i=0;i<markCount;i++){
+			//  		sprintf(buf,"(%d %d)",DomainPoints[i].x,DomainPoints[i].y);
+			//  		TextOut(hdc,10+i/50*50,250+i%50*8,buf,strlen(buf));
+			//  		if(mark[i]==i)count++;
+			//  	}
+			//  	sprintf(buf,"labelCount =  %d count = %d ",markCount,count);
+			//  	TextOut(hdc,0,770,buf,strlen(buf));
+			//  }
+			/*
+			if(markCount){
+				HFONT hFont = CreateFont(-8,-4,0,0,0,0,0,0,0,0,0,0,0,0);
+				HFONT hOldFont = SelectObject(hdc,hFont);
+				int count =0;
+				for(int i=0;i<markCount;i++){
+					sprintf(buf,"(%d %d)",DomainPoints[i].x,DomainPoints[i].y);
+					TextOut(hdc,10+i/50*50,250+i%50*8,buf,strlen(buf));
+					Ellipse(hdc,DomainPoints[i].x-2,DomainPoints[i].y-2,DomainPoints[i].x+2,DomainPoints[i].y+2);
+					if(mark[i]==i){
+						
+						count++;
+					}
+				}
+				SelectObject(hdc,hOldFont);
+				sprintf(buf,"labelCount =  %d count = %d ",markCount,count);
+				TextOut(hdc,0,770,buf,strlen(buf));
+				
+				DeleteObject(hFont);
+			}*/
+			//StretchBlt(hdc,300,0,bitmap.bmWidth*3,bitmap.bmHeight*3,hdc,0,0,bitmap.bmWidth,bitmap.bmHeight,SRCCOPY);
+
+			EndPaint(hwnd,&ps);
+			return 0;
+		case WM_KEYDOWN:
+			switch(wParam){
+				case VK_ESCAPE:
+					PostMessage(hwnd,WM_DESTROY,0,0);
+					break;
+				case VK_F2:					
+					memcpy(bitmap.bmBits,pOrigin,bitmap.bmWidthBytes*bitmap.bmHeight);
+					break;
+				case VK_F3:
+					memcpy(bitmap.bmBits,pOrigin,bitmap.bmWidthBytes*bitmap.bmHeight);
+					GreyBmp(&bitmap);
+					break;
+				case VK_F4:
+					memcpy(bitmap.bmBits,pOrigin,bitmap.bmWidthBytes*bitmap.bmHeight);
+					GreyBmp(&bitmap);
+					GetHistogram(&bitmap,histogram,histogramSize,&avHistogram,&maxHistogram);
+					BinaryBmp(&bitmap,(BYTE)avHistogram);
+					break;
+				case VK_F5:
+					memcpy(bitmap.bmBits,pOrigin,bitmap.bmWidthBytes*bitmap.bmHeight);
+					GreyBmp(&bitmap);
+					GetHistogram(&bitmap,histogram,histogramSize,&avHistogram,&maxHistogram);
+					BinaryBmp(&bitmap,(BYTE)avHistogram);				
+					GetDomain( &bitmap, &pImage, &pMap,&DomainsCount,&DomainPoints,&mark,&markCount);
+					break;
+				case VK_F6:
+					memcpy(bitmap.bmBits,pOrigin,bitmap.bmWidthBytes*bitmap.bmHeight);
+					GreyBmp(&bitmap);
+					GetHistogram(&bitmap,histogram,histogramSize,&avHistogram,&maxHistogram);
+					BinaryBmp(&bitmap,(BYTE)avHistogram);				
+					GetDomain( &bitmap, &pImage, &pMap,&DomainsCount,&DomainPoints,&mark,&markCount);
+					GetEdge(&bitmap,&pImage);
+					break;
+			}
+			SetBitmapBits(hBitmap,bitmap.bmWidthBytes*bitmap.bmHeight,bitmap.bmBits);
+			InvalidateRect(hwnd,NULL,FALSE);
+			return 0;	
+		case WM_DESTROY:
+			if(mark)free(mark);
+			if(pImage)free(pImage);
+			if(pMap)free(pMap);
+			if(bitmap.bmBits)free(bitmap.bmBits);
+			if(pOrigin)free(pOrigin);
+			PostQuitMessage(0);
+			return 0;
+	}
+	return DefWindowProc(hwnd, message,wParam,lParam);
+}
+
+VOID BinaryBmp(BITMAP *pBmp,BYTE threshold){
+	BYTE *p,val;
+	p=pBmp->bmBits;
+	for(int y=0;y<pBmp->bmHeight;y++){
+		p=pBmp->bmBits + pBmp->bmWidthBytes*y;
+		for(int x=0;x<pBmp->bmWidth;x++,p+=4){
+			if(*p>threshold){*p=*(p+1)=*(p+2)=0xFF;}
+			else{*p=*(p+1)=*(p+2)=0x00;}
+		}
+	}
+}
+
+//将二值图的连通区域 标记 为不同颜色
+
+VOID GetDomain( BITMAP *pBmp, BYTE **Image, int **map, int *DomainsCount, POINT **seeds,int **mark,int *labelcount){
+	// 1 获取图片的Image矩阵
+
+	int width, height;
+	width=pBmp->bmWidth,height = pBmp->bmHeight;
+	*Image = (BYTE*)malloc(width*height*sizeof(BYTE));
+	BYTE *p,*q= *Image;
+	for(int y=0;y<height;y++){
+		p = pBmp->bmBits + pBmp->bmWidthBytes * y;
+		for(int x=0; x<width; x++,p+=4,q++){
+			*q = (0xFF-*p)/0xFF;
+		}
+	}
+	
+	// 2 在Image矩阵上做连通标记	
+	// ConnectedLabeling(Image,labelmap,width,height,8,pAddress);
+	int domainSize;
+	int x,y,d,u,v;
+	int dx[8]={ -1, -1,  0,  1,  1,  1,  0, -1 };
+	int dy[8]={  0, -1, -1, -1,  0,  1,  1,  1 };
+	int *r,*s;
+	BYTE *t;
+
+	POINT **label_list = (POINT**)malloc(100*sizeof(POINT*));
+	for(int i=0;i<100;i++){
+		label_list[i] = (POINT*)malloc(100*sizeof(POINT));
+		memset(label_list[i],0,100*sizeof(POINT));
+	}
+
+	*map = (int*)malloc( width*height*sizeof(int) );
+	memset(*map,0,width*height*sizeof(int));
+
+	*mark = (int*)malloc(600*sizeof(int));
+	memset(*mark,0,600*sizeof(int));
+	*seeds = (POINT*)malloc(600*sizeof(POINT));
+	memset(*seeds,0,600*sizeof(POINT));
+
+	int label, cnt, min,max,dt;
+
+	//  (1) 第一次扫描：
+	//      访问当前像素B(x,y)，如果B(x,y) == 1：
+	//      a、如果B(x,y)的领域中像素值都为0，则赋予B(x,y)一个新的label：
+	//         label += 1， B(x,y) = label；
+	//			mark[label]=0;
+
+	//      b、如果B(x,y)的领域中有像素值 > 1的像素Neighbors：
+	//         1）将Neighbors中的最小值赋予给B(x,y):
+	//            B(x,y) = min{Neighbors} 
+
+	//         2）记录Neighbors中各个值（label）之间的相等关系，即这些值（label）同属同一个连通区域；
+	//            labelSet[i] = { label_m, .., label_n }，
+	//            labelSet[i]中的所有label都属于同一个连通区域
+	//            （注：这里可以有多种实现方式，只要能够记录这些具有相等关系的label之间的关系即可）
+	//			if(label>min)mark[label]=min;
+
+	//  (2) 第二次扫描：
+	//      访问当前像素B(x,y)，如果B(x,y) > 1：
+	//      a 找到与label = B(x,y)同属相等关系的一个最小label值，赋予给B(x,y)；
+
+	//      完成扫描后，图像中具有相同label值的像素就组成了同一个连通区域。
+	
+	// round 1 
+	q = *Image;
+	r = *map;
+	dt = 0;label=0;
+	for(int y=0; y<height; y++){
+		for(int x=0; x<width; x++, r++, q++){
+			if(*q){//只标注图像点
+				cnt=0;//点(x,y)邻域中标注过的点的个数
+				min=100;                  // 1  2  4
+				for(d=0;d<4;d++){         // 0  x
+					u=x+dx[d],v=y+dy[d];
+					if(0<=u && u<width && 0<=v && v<height){
+						s = *map + v * width + u;
+						cnt += *s;
+						if(*s>0 && min>*s){
+							min=*s;
+						}
+					}
+				}
+
+				if(cnt==0){//如果邻域没有区域点，则区域计数加1
+					label++;
+					*r=label;//标注区域编号
+					(*mark)[label]=label;
+
+					(*seeds)[label].x=x;
+					(*seeds)[label].y=y;
+
+
+					//keep new label list
+					
+				}else{
+					// 1）将Neighbors中的最小值赋予给B(x,y): B(x,y) = min{Neighbors}
+					*r=min;
+
+					//   ========  The Algorithm of Keeping equal label table ========= 	
+					// 2）记录Neighbors中各个值（label）之间的相等关系，即这些值（label）属于同一个连通区域；
+					// labelSet[i] = { label_m, .., label_n }，
+					// labelSet[i]中的所有label都属于同一个连通区域
+					//（注：这里可以有多种实现方式，只要能够记录这些具有相等关系的label之间的关系即可）
+					for(d=0;d<4;d++){
+						u=x+dx[d],v=y+dy[d];
+						if(0<=u && u<width && 0<=v && v<height){
+							s = *map + v * width + u;
+							if(*s && (*mark)[*s] > *r)
+								(*mark)[*s]=*r;
+						}
+					}					
+				}				
+			}
+		}
+	}
+
+	// Merge the equal label table
+	*DomainsCount = *labelcount=label+1;
+	for(int i=1;i<label+1;i++){
+		int j=i;
+		while((*mark)[j]!=j){
+			(*mark)[j] = (*mark)[(*mark)[j]];
+			j--;
+		}
+	}
+
+	// round 2
+
+	r = *map;
+	for(int y=0; y<height; y++){
+		for(int x=0; x<width; x++, r++){
+			*r=(*mark)[*r];
+		}
+	}	
+
+
+	//Restore map to Image	
+	q = *Image;
+	r = *map;
+	for(int y=0; y<height; y++){
+		for(int x=0; x<width; x++, r++, q++){
+			*q = *r;
+		}
+	}
+
+	// 3 根据image矩阵的标记给bitmap着色
+	q = *Image;
+	BYTE color[10][3]={  {0xFF,0xFF,0xFF},{0x80,0xFF,0x00},{0xFF,0x00,0x00},{0xFF,0x00,0xFF},{0x80,0x00,0xFF},
+			     {0x00,0xFF,0x00},{0x00,0xFF,0xFF},{0x00,0xFF,0x80},{0x00,0x80,0xFF},{0x00,0x80,0x80} };
+	for(int y=0;y<height;y++){
+		p = pBmp->bmBits + pBmp->bmWidthBytes * y;
+		for(int x=0; x<width; x++,p+=4,q++){
+			if(*q){
+				*p=color[(*q)%9+1][0];
+				*(p+1)=color[(*q)%9+1][1];
+				*(p+2)=color[(*q)%9+1][2];
+			}
+		}
+	}
+}
+VOID GetEdge(BITMAP *pBmp,BYTE **Image){
+	int width, height;
+	int x, y, d, u, v;
+	BYTE *p, *q;
+	width = pBmp->bmWidth, height = pBmp->bmHeight;
+
+	int dx[8]={ -1, -1,  0,  1,  1,  1,  0, -1 };
+	int dy[8]={  0, -1, -1, -1,  0,  1,  1,  1 };
+	BYTE *map = (BYTE*)malloc(width*height*sizeof(BYTE));
+	memcpy(map,*Image,width*height*sizeof(BYTE));
+	q = *Image;p=map;
+	for(int y=0;y<height;y++){
+		//p = pBmp->bmBits + pBmp->bmWidthBytes * y;
+		for(int x=0; x<width; x++,p++,q++){
+			if(*p){
+				int sum=0;
+				BYTE *s;
+				for(d=0;d<8;d++){
+					u=x+dx[d],v=y+dy[d];
+					if(0<u && u<width && 0<v && v<height){
+					s=map + v*width + u;
+					sum += (*s>0);}
+				}
+				if(sum==0 || sum==8)*q = 0; //if the dot is not on Edge, set to zero.
+			}
+		}
+	}
+	memset(pBmp->bmBits,0xFF,pBmp->bmWidthBytes*pBmp->bmHeight);
+	q = *Image;
+	for(int y=0;y<height;y++){
+		p = pBmp->bmBits + pBmp->bmWidthBytes * y;
+		for(int x=0; x<width; x++,p+=4,q++){
+			if(*q){ //set the dot to red color
+				*p=0;
+				*(p+1)=0;
+				*(p+2)=0XFF;
+			}
+		}
+	}		
+	free(map);
+}
+VOID GetHistogram(BITMAP *pBmp, int *histogram, int histogramSize, int *avHistogram, int *maxHistogram){
+	BYTE *p,val;
+	int sum=0,max=0;
+	if(histogram==NULL){
+		histogram = (int*)malloc(histogramSize*sizeof(int));
+	}
+	memset(histogram,0,histogramSize*sizeof(int));
+
+	p=pBmp->bmBits;
+	for(int y=0;y<pBmp->bmHeight;y++){
+		p=pBmp->bmBits + pBmp->bmWidthBytes*y;
+		for(int x=0;x<pBmp->bmWidth;x++,p+=4){
+			sum+=*p;
+			histogram[*p]++;
+		}
+	}
+	*avHistogram = sum/(pBmp->bmHeight * pBmp->bmWidth);
+	for(int i=0;i<histogramSize;i++){
+		if(max < histogram[i])max = histogram[i];
+	}
+	*maxHistogram = max;
+}
+VOID GreyBmp(BITMAP *pBmp){
+	BYTE *p,val;
+	p=pBmp->bmBits;
+	for(int y=0;y<pBmp->bmHeight;y++){
+		p=pBmp->bmBits + pBmp->bmWidthBytes*y;
+		for(int x=0;x<pBmp->bmWidth;x++,p+=4){
+			//Y' = 0.299 R' + 0.587 G' + 0.114 B'   sRGB  5:6:5
+			//Y' = 0.2126 R' + 0.7152 G' + 0.0722 B'
+			val = (BYTE)(*p*0.114+*(p+1)*0.587+*(p+2)*0.229);
+			*p=*(p+1)=*(p+2)=val;
+		}
+	}	
+}
+
+VOID ShowBmpInfo(HWND hwnd,BITMAP *pBmp){
+	HDC hdc = GetDC(hwnd);
+	char buf[100];
+
+	sprintf(buf,"bmType = %04X %d",pBmp->bmType,pBmp->bmType);
+	TextOut(hdc,600,0,buf,strlen(buf));
+	sprintf(buf,"bmWidth = %04X %d",pBmp->bmWidth,pBmp->bmWidth);
+	TextOut(hdc,600,20,buf,strlen(buf));
+	sprintf(buf,"bmHeight = %04X %d",pBmp->bmHeight,pBmp->bmHeight);
+	TextOut(hdc,600,40,buf,strlen(buf));
+	sprintf(buf,"bmWidthBytes = %04X %d",pBmp->bmWidthBytes,pBmp->bmWidthBytes);
+	TextOut(hdc,600,60,buf,strlen(buf));
+	sprintf(buf,"bmPlanes = %04X %d",pBmp->bmPlanes,pBmp->bmPlanes);
+	TextOut(hdc,600,80,buf,strlen(buf));
+	sprintf(buf,"bmBitsPixel = %04X %d",pBmp->bmBitsPixel,pBmp->bmBitsPixel);
+	TextOut(hdc,600,100,buf,strlen(buf));
+	sprintf(buf,"bmBits = %04X %d",pBmp->bmBits,pBmp->bmBits);
+	TextOut(hdc,600,120,buf,strlen(buf));
+	sprintf(buf,"LONG = %04X %d",sizeof(LONG),sizeof(LONG));
+	TextOut(hdc,600,140,buf,strlen(buf));
+	sprintf(buf,"LONG LONG = %04X %d",sizeof(long long),sizeof(long long));
+	TextOut(hdc,600,160,buf,strlen(buf));
+	ReleaseDC(hwnd,hdc);
+}
+VOID ShowImage(HDC hdc, BITMAP bitmap, int *pMap){
+	char buf[100];
+	HFONT hFont = CreateFont(-8,-4,0,0,0,0,0,0,0,0,0,0,0,0);
+	SelectObject(hdc,hFont);
+	for(int y=0;y<bitmap.bmHeight;y++){
+		for(int x=0;x<bitmap.bmWidth;x++){
+			if(*(pMap+y*bitmap.bmWidth+x)){
+				sprintf(buf,"%d",*(pMap+y*bitmap.bmWidth+x));
+				TextOut(hdc,300+x*8,y*8,buf,strlen(buf));
+			}else{
+				TextOut(hdc,300+x*8,y*8,".",1);
+			}
+		}
+		sprintf(buf,"%d",y);
+		TextOut(hdc,280,y*8,buf,strlen(buf));
+	}
+	DeleteObject(hFont);
+}
