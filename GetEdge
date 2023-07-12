@@ -535,9 +535,9 @@ VOID ShowImage(HDC hdc, BITMAP bitmap, int *pMap){
 	}
 	DeleteObject(hFont);
 }
-VOID TracingEdge( BITMAP *pBmp, BYTE **Image, POINT pt, POINT **EdgePoint, int *EdgePointCount ){
+VOID TracingEdge( BITMAP *pBmp, BYTE **Image, POINT pt, POINT **EdgePoint, int *EdgePointCount,BYTE **linkCode ){
 
-	char buf[100];
+	// char buf[100];
 
     //int rowMoves[] = {0, 1, 0, -1};
     //int colMoves[] = {1, 0, -1, 0};	
@@ -562,38 +562,57 @@ VOID TracingEdge( BITMAP *pBmp, BYTE **Image, POINT pt, POINT **EdgePoint, int *
 	int currentCol = startCol;
 	
 	*EdgePoint = (POINT*)malloc(100000*sizeof(POINT));
+	*linkCode = (BYTE*)malloc(100000*sizeof(BYTE));
 
-	int k=0,dt=0;
+	int k=0,dt=0,l=0,count=0;
 	int nextRow;
 	int nextCol;
 	BOOL stop = FALSE;
+
 	do{
 		//process the current position which is an EdgePoint. 
-		(*EdgePoint)[k].x = currentCol; (*EdgePoint)[k++].y = currentRow;
+		if(count!=8){k=l;//use l to remember where the last edge segment line stops.
+			(*EdgePoint)[k].x = currentCol; (*EdgePoint)[k].y = currentRow;
+			k++;l=k;
+		}
+
 		 // Check the possible moves in clockwise order
+		count=0;
 		for(int d=dt;d<dt+8;d++){
 			nextRow = currentRow + rowMoves[d%8];
 			nextCol = currentCol + colMoves[d%8];
+			count++;
 
 			//stop if the next position goes to the beginning.
-			if(nextRow == startRow && nextCol == startCol){stop = TRUE;} 
+			if(nextRow == startRow && nextCol == startCol){
+				(*linkCode)[k] = d%8; stop = TRUE;
+			} 
 
 			// Skip if the next position is out of bounds
 			if (nextRow < 0 || nextRow >= numRows || nextCol < 0 || nextCol >= numCols)
                 continue;
 			
-            // Skip if the next position is not an edge pixel or has been visited before
+            // Skip if the next position is not an edge pixel or it has been visited before
 			if ( (*Image)[nextRow * numCols + nextCol] != 1 || visited[nextRow][nextCol] == 1 )
 				continue;
 			// Move to the next position
 			(*Image)[nextRow * numCols + nextCol]=2;
+			(*linkCode)[k-1] = d%8;
 			currentRow = nextRow;
             currentCol = nextCol;
             visited[currentRow][currentCol] = 1;
-            dt=d+5;
+            dt=(d+5)%8;
             break;
+		}
+		if(count==8){ // back trace if there is no edge point in the neighborhood.
+			if(l==k)(*linkCode)[k-1] = 0xFF;
+			sprintf(buf," (%d %d) dt=%d k=%d \n No Edge point from here.",currentCol,currentRow,dt,k );
+			MessageBox(NULL,buf,"KK",MB_OK);
+			k--;dt=((*linkCode)[k]+1)%8;
+			currentCol = (*EdgePoint)[k].x; currentRow = (*EdgePoint)[k].y;
 		}
 	}while(!stop );
 	*EdgePointCount = k;
 	ImgToBmp(pBmp,Image);
 }
+
