@@ -535,3 +535,65 @@ VOID ShowImage(HDC hdc, BITMAP bitmap, int *pMap){
 	}
 	DeleteObject(hFont);
 }
+VOID TracingEdge( BITMAP *pBmp, BYTE **Image, POINT pt, POINT **EdgePoint, int *EdgePointCount ){
+
+	char buf[100];
+
+    //int rowMoves[] = {0, 1, 0, -1};
+    //int colMoves[] = {1, 0, -1, 0};	
+
+    int rowMoves[] = {  0, -1, -1, -1,  0,  1,  1,  1 };
+    int colMoves[] = { -1, -1,  0,  1,  1,  1,  0, -1 };   
+
+	int MAX_ROWS,MAX_COLS;
+	int numCols = pBmp->bmWidth;
+	int numRows = pBmp->bmHeight;
+	int startRow = pt.y, startCol = pt.x;
+
+	int **visited = (int**)malloc(numRows * sizeof(int*));
+	for(int i=0;i<numRows;i++){
+		visited[i]=(int*)malloc(numCols * sizeof(int));
+		memset(visited[i],0,numCols * sizeof(int));
+	}
+
+	visited[startRow][startCol]=1;
+
+	int currentRow = startRow;
+	int currentCol = startCol;
+	
+	*EdgePoint = (POINT*)malloc(100000*sizeof(POINT));
+
+	int k=0,dt=0;
+	int nextRow;
+	int nextCol;
+	BOOL stop = FALSE;
+	do{
+		//process the current position which is an EdgePoint. 
+		(*EdgePoint)[k].x = currentCol; (*EdgePoint)[k++].y = currentRow;
+		 // Check the possible moves in clockwise order
+		for(int d=dt;d<dt+8;d++){
+			nextRow = currentRow + rowMoves[d%8];
+			nextCol = currentCol + colMoves[d%8];
+
+			//stop if the next position goes to the beginning.
+			if(nextRow == startRow && nextCol == startCol){stop = TRUE;} 
+
+			// Skip if the next position is out of bounds
+			if (nextRow < 0 || nextRow >= numRows || nextCol < 0 || nextCol >= numCols)
+                continue;
+			
+            // Skip if the next position is not an edge pixel or has been visited before
+			if ( (*Image)[nextRow * numCols + nextCol] != 1 || visited[nextRow][nextCol] == 1 )
+				continue;
+			// Move to the next position
+			(*Image)[nextRow * numCols + nextCol]=2;
+			currentRow = nextRow;
+            currentCol = nextCol;
+            visited[currentRow][currentCol] = 1;
+            dt=d+5;
+            break;
+		}
+	}while(!stop );
+	*EdgePointCount = k;
+	ImgToBmp(pBmp,Image);
+}
